@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Server, ISP, VpnPackage, V2RayConfig, AppNotification, AppSettings, CopyStat, Page } from '../types';
+import { Server, ISP, VpnPackage, V2RayConfig, AppNotification, AppSettings, CopyStat } from '../types';
 import { initialServers, initialISPs, initialPackages, initialConfigs, initialNotifications, defaultSettings, ADMIN_PASSWORD } from '../data/initialData';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import {
@@ -11,8 +11,6 @@ import type { Firestore } from 'firebase/firestore';
 interface AppContextType {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
-  currentPage: Page;
-  setCurrentPage: (page: Page) => void;
   loading: boolean;
   servers: Server[];
   isps: ISP[];
@@ -54,6 +52,8 @@ interface AppContextType {
   toast: string | null;
   showToast: (msg: string) => void;
   usingFirebase: boolean;
+  watchingAds: boolean;
+  setWatchingAds: (v: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -71,7 +71,6 @@ function getDB(): Firestore {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => loadLS('gvh-theme', 'dark'));
-  const [currentPage, setCurrentPage] = useState<Page>('home');
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState<Server[]>([]);
   const [isps, setISPs] = useState<ISP[]>([]);
@@ -82,6 +81,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [watchingAds, setWatchingAds] = useState(false);
 
   // Persist theme
   useEffect(() => {
@@ -107,16 +107,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         })
       );
 
-      // Settings document
       unsubs.push(
         onSnapshot(doc(database, 'settings', 'app'), (snap) => {
-          if (snap.exists()) {
-            setSettings(snap.data() as AppSettings);
-          }
+          if (snap.exists()) setSettings(snap.data() as AppSettings);
         })
       );
 
-      // Copy stats
       unsubs.push(
         onSnapshot(query(collection(database, 'copyStats'), orderBy('timestamp', 'desc'), limit(500)), (snap) => {
           setCopyStats(snap.docs.map(d => ({ id: d.id, ...d.data() } as CopyStat)));
@@ -137,7 +133,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Persist to localStorage when not using Firebase
   useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-servers', servers); }, [servers]);
   useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-isps', isps); }, [isps]);
   useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-packages', packages); }, [packages]);
@@ -156,12 +151,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isFirebaseConfigured) { const { id, ...data } = s; setDoc(doc(getDB(), 'servers', id), data); }
     else { setServers(prev => { const n = [...prev, s]; saveLS('gvh-servers', n); return n; }); }
   }, []);
-
   const updateServer = useCallback((s: Server) => {
     if (isFirebaseConfigured) { const { id, ...data } = s; updateDoc(doc(getDB(), 'servers', id), data); }
     else { setServers(prev => { const n = prev.map(x => x.id === s.id ? s : x); saveLS('gvh-servers', n); return n; }); }
   }, []);
-
   const deleteServer = useCallback((id: string) => {
     if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'servers', id)); }
     else { setServers(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-servers', n); return n; }); }
@@ -172,12 +165,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isFirebaseConfigured) { const { id, ...data } = i; setDoc(doc(getDB(), 'isps', id), data); }
     else { setISPs(prev => { const n = [...prev, i]; saveLS('gvh-isps', n); return n; }); }
   }, []);
-
   const updateISP = useCallback((i: ISP) => {
     if (isFirebaseConfigured) { const { id, ...data } = i; updateDoc(doc(getDB(), 'isps', id), data); }
     else { setISPs(prev => { const n = prev.map(x => x.id === i.id ? i : x); saveLS('gvh-isps', n); return n; }); }
   }, []);
-
   const deleteISP = useCallback((id: string) => {
     if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'isps', id)); }
     else { setISPs(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-isps', n); return n; }); }
@@ -188,12 +179,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isFirebaseConfigured) { const { id, ...data } = p; setDoc(doc(getDB(), 'packages', id), data); }
     else { setPackages(prev => { const n = [...prev, p]; saveLS('gvh-packages', n); return n; }); }
   }, []);
-
   const updatePackage = useCallback((p: VpnPackage) => {
     if (isFirebaseConfigured) { const { id, ...data } = p; updateDoc(doc(getDB(), 'packages', id), data); }
     else { setPackages(prev => { const n = prev.map(x => x.id === p.id ? p : x); saveLS('gvh-packages', n); return n; }); }
   }, []);
-
   const deletePackage = useCallback((id: string) => {
     if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'packages', id)); }
     else { setPackages(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-packages', n); return n; }); }
@@ -204,12 +193,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isFirebaseConfigured) { const { id, ...data } = c; setDoc(doc(getDB(), 'configs', id), data); }
     else { setConfigs(prev => { const n = [...prev, c]; saveLS('gvh-configs', n); return n; }); }
   }, []);
-
   const updateConfig = useCallback((c: V2RayConfig) => {
     if (isFirebaseConfigured) { const { id, ...data } = c; updateDoc(doc(getDB(), 'configs', id), data); }
     else { setConfigs(prev => { const n = prev.map(x => x.id === c.id ? c : x); saveLS('gvh-configs', n); return n; }); }
   }, []);
-
   const deleteConfig = useCallback((id: string) => {
     if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'configs', id)); }
     else { setConfigs(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-configs', n); return n; }); }
@@ -220,12 +207,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (isFirebaseConfigured) { const { id, ...data } = n; setDoc(doc(getDB(), 'notifications', id), data); }
     else { setNotifications(prev => { const next = [n, ...prev]; saveLS('gvh-notifications', next); return next; }); }
   }, []);
-
   const updateNotification = useCallback((n: AppNotification) => {
     if (isFirebaseConfigured) { const { id, ...data } = n; updateDoc(doc(getDB(), 'notifications', id), data); }
     else { setNotifications(prev => { const next = prev.map(x => x.id === n.id ? n : x); saveLS('gvh-notifications', next); return next; }); }
   }, []);
-
   const deleteNotification = useCallback((id: string) => {
     if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'notifications', id)); }
     else { setNotifications(prev => { const nv = prev.filter(x => x.id !== id); saveLS('gvh-notifications', nv); return nv; }); }
@@ -244,11 +229,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const pkg = packages.find(p => p.id === config.packageId);
     const stat: CopyStat = {
       id: `stat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      configId,
-      timestamp: new Date().toISOString(),
-      serverId: config.serverId,
-      ispId: pkg?.ispId || '',
-      packageId: config.packageId,
+      configId, timestamp: new Date().toISOString(),
+      serverId: config.serverId, ispId: pkg?.ispId || '', packageId: config.packageId,
     };
     if (isFirebaseConfigured) {
       addDoc(collection(getDB(), 'copyStats'), stat);
@@ -259,28 +241,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [configs, packages]);
 
-  // Stats helpers
+  // Stats
   const getTotalCopies = useCallback(() => copyStats.length, [copyStats]);
   const getTodayCopies = useCallback(() => {
     const today = new Date().toISOString().split('T')[0];
     return copyStats.filter(s => s.timestamp.startsWith(today)).length;
   }, [copyStats]);
   const getPopularISP = useCallback(() => {
-    const counts: Record<string, number> = {};
-    copyStats.forEach(s => { counts[s.ispId] = (counts[s.ispId] || 0) + 1; });
-    const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const c: Record<string, number> = {}; copyStats.forEach(s => { c[s.ispId] = (c[s.ispId] || 0) + 1; });
+    const topId = Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
     return isps.find(i => i.id === topId) || null;
   }, [copyStats, isps]);
   const getPopularPackage = useCallback(() => {
-    const counts: Record<string, number> = {};
-    copyStats.forEach(s => { counts[s.packageId] = (counts[s.packageId] || 0) + 1; });
-    const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const c: Record<string, number> = {}; copyStats.forEach(s => { c[s.packageId] = (c[s.packageId] || 0) + 1; });
+    const topId = Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
     return packages.find(p => p.id === topId) || null;
   }, [copyStats, packages]);
   const getPopularServer = useCallback(() => {
-    const counts: Record<string, number> = {};
-    copyStats.forEach(s => { counts[s.serverId] = (counts[s.serverId] || 0) + 1; });
-    const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const c: Record<string, number> = {}; copyStats.forEach(s => { c[s.serverId] = (c[s.serverId] || 0) + 1; });
+    const topId = Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0];
     return servers.find(sv => sv.id === topId) || null;
   }, [copyStats, servers]);
   const getCopiesByISP = useCallback(() => {
@@ -315,7 +294,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      theme, toggleTheme, currentPage, setCurrentPage, loading,
+      theme, toggleTheme, loading,
       servers, isps, packages, configs, notifications, copyStats, settings,
       adminAuthenticated, adminLogin, adminLogout,
       addServer, updateServer, deleteServer,
@@ -329,6 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getCopiesByISP, getCopiesByPackage, getCopiesByServer,
       getRecentStats, seedDatabase,
       toast, showToast, usingFirebase: isFirebaseConfigured,
+      watchingAds, setWatchingAds,
     }}>
       {children}
     </AppContext.Provider>

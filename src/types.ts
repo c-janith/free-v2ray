@@ -44,6 +44,8 @@ export interface AppNotification {
 export interface AppSettings {
   adUrls: string[];
   adWaitTime: number;
+  popunderScriptUrl: string;
+  tutorialVideos: Record<string, string>;
 }
 
 export interface CopyStat {
@@ -54,5 +56,3 @@ export interface CopyStat {
   ispId: string;
   packageId: string;
 }
-
-export type Page = 'home' | 'vpn' | 'tutorials' | 'admin';

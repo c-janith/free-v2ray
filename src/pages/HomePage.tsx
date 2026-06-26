@@ -1,9 +1,11 @@
 import { useApp } from '../context/AppContext';
+import { useNavigate } from 'react-router-dom';
 import { Shield, Globe, Zap, Users, Server, TrendingUp, ArrowRight, ChevronDown, Bell } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function HomePage() {
-  const { setCurrentPage, servers, notifications } = useApp();
+  const navigate = useNavigate();
+  const { servers, notifications } = useApp();
   const [counters, setCounters] = useState({ years: 0, traffic: 0, servers: 0, users: 0 });
 
   useEffect(() => {
@@ -33,54 +35,34 @@ export default function HomePage() {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center justify-center hero-gradient overflow-hidden">
-        {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-10 w-72 h-72 bg-brand-500/5 rounded-full blur-3xl animate-float" />
           <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-float-delay" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-brand-500/5 rounded-full animate-spin-slow" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-cyan-500/5 rounded-full animate-spin-slow" style={{ animationDirection: 'reverse', animationDuration: '15s' }} />
         </div>
-
         <div className="relative z-10 max-w-5xl mx-auto px-4 text-center">
-          {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 animate-fade-in-up text-sm font-medium">
             <span className="status-dot status-online" />
             <span className="text-brand-400">{servers.filter(s => s.status === 'online').length} Servers Online</span>
             <span className="text-gray-400">•</span>
             <span className="text-gray-400">Serving Sri Lanka</span>
           </div>
-
-          {/* Title */}
           <h1 className="text-5xl sm:text-6xl md:text-8xl font-black mb-6 animate-fade-in-up leading-tight" style={{ animationDelay: '0.1s' }}>
-            <span className="gradient-text">Ghost</span>
-            <br />
+            <span className="gradient-text">Ghost</span><br />
             <span className="dark:text-white text-gray-900">VPN Hub</span>
           </h1>
-
-          {/* Subtitle */}
           <p className="text-lg sm:text-xl md:text-2xl dark:text-gray-400 text-gray-600 mb-8 max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            Free V2Ray configs optimized for Sri Lankan ISP packages. 
-            Fast, secure, and reliable — trusted for <span className="text-brand-400 font-semibold">4+ years</span>.
+            Free V2Ray configs optimized for Sri Lankan ISP packages. Fast, secure, and reliable — trusted for <span className="text-brand-400 font-semibold">4+ years</span>.
           </p>
-
-          {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            <button
-              onClick={() => setCurrentPage('vpn')}
-              className="group px-8 py-4 bg-gradient-to-r from-brand-500 to-cyan-500 text-white font-bold rounded-2xl text-lg shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
-            >
-              Get Free Config
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <button onClick={() => navigate('/vpn')} className="group px-8 py-4 bg-gradient-to-r from-brand-500 to-cyan-500 text-white font-bold rounded-2xl text-lg shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2">
+              Get Free Config <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
-            <button
-              onClick={() => setCurrentPage('tutorials')}
-              className="px-8 py-4 glass dark:text-white text-gray-700 font-bold rounded-2xl text-lg hover:bg-white/10 dark:hover:bg-white/5 transition-all duration-300"
-            >
+            <button onClick={() => navigate('/tutorials')} className="px-8 py-4 glass dark:text-white text-gray-700 font-bold rounded-2xl text-lg hover:bg-white/10 dark:hover:bg-white/5 transition-all duration-300">
               Setup Tutorial
             </button>
           </div>
-
-          {/* Scroll indicator */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-fade-in" style={{ animationDelay: '1s' }}>
             <ChevronDown className="w-6 h-6 text-gray-400 animate-bounce" />
           </div>
@@ -129,14 +111,9 @@ export default function HomePage() {
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-black dark:text-white text-gray-900 mb-4">
-              Supported <span className="gradient-text">ISPs</span>
-            </h2>
-            <p className="dark:text-gray-400 text-gray-600 max-w-xl mx-auto">
-              We provide optimized V2Ray configs specifically for these Sri Lankan ISP packages
-            </p>
+            <h2 className="text-3xl md:text-4xl font-black dark:text-white text-gray-900 mb-4">Supported <span className="gradient-text">ISPs</span></h2>
+            <p className="dark:text-gray-400 text-gray-600 max-w-xl mx-auto">We provide optimized V2Ray configs specifically for these Sri Lankan ISP packages</p>
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               { name: 'Dialog', emoji: '💬', color: 'blue', packages: ['Zoom Unlimited', 'Social'], tag: 'Wifi' },
@@ -160,8 +137,7 @@ export default function HomePage() {
                 <div className="space-y-2">
                   {isp.packages.map((pkg, j) => (
                     <div key={j} className="flex items-center gap-2 text-sm dark:text-gray-300 text-gray-600">
-                      <Zap className="w-3.5 h-3.5 text-brand-400" />
-                      {pkg}
+                      <Zap className="w-3.5 h-3.5 text-brand-400" />{pkg}
                     </div>
                   ))}
                 </div>
@@ -175,14 +151,9 @@ export default function HomePage() {
       <section className="py-20 dark:bg-surface-card/50 bg-gray-50">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-black dark:text-white text-gray-900 mb-4">
-              How It <span className="gradient-text">Works</span>
-            </h2>
-            <p className="dark:text-gray-400 text-gray-600 max-w-xl mx-auto">
-              Get your free V2Ray config in just 4 simple steps
-            </p>
+            <h2 className="text-3xl md:text-4xl font-black dark:text-white text-gray-900 mb-4">How It <span className="gradient-text">Works</span></h2>
+            <p className="dark:text-gray-400 text-gray-600 max-w-xl mx-auto">Get your free V2Ray config in just 4 simple steps</p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {[
               { step: 1, title: 'Choose Server', desc: 'Select from our global server locations', icon: Globe },
@@ -200,14 +171,9 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-
           <div className="text-center mt-12">
-            <button
-              onClick={() => setCurrentPage('vpn')}
-              className="group px-8 py-4 bg-gradient-to-r from-brand-500 to-cyan-500 text-white font-bold rounded-2xl text-lg shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-300 hover:scale-105 inline-flex items-center gap-2"
-            >
-              Get Started Now
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <button onClick={() => navigate('/vpn')} className="group px-8 py-4 bg-gradient-to-r from-brand-500 to-cyan-500 text-white font-bold rounded-2xl text-lg shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-300 hover:scale-105 inline-flex items-center gap-2">
+              Get Started Now <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
         </div>
@@ -217,9 +183,7 @@ export default function HomePage() {
       <section className="py-20">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-black dark:text-white text-gray-900 mb-4">
-              Why <span className="gradient-text">Ghost VPN Hub</span>?
-            </h2>
+            <h2 className="text-3xl md:text-4xl font-black dark:text-white text-gray-900 mb-4">Why <span className="gradient-text">Ghost VPN Hub</span>?</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
@@ -243,24 +207,13 @@ export default function HomePage() {
       {/* CTA Section */}
       <section className="py-20 dark:bg-surface-card/50 bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-5xl font-black dark:text-white text-gray-900 mb-6">
-            Ready to <span className="gradient-text">Get Connected</span>?
-          </h2>
-          <p className="dark:text-gray-400 text-gray-600 text-lg mb-8 max-w-xl mx-auto">
-            Join thousands of Sri Lankan users who trust Ghost VPN Hub for their daily internet needs.
-          </p>
+          <h2 className="text-3xl md:text-5xl font-black dark:text-white text-gray-900 mb-6">Ready to <span className="gradient-text">Get Connected</span>?</h2>
+          <p className="dark:text-gray-400 text-gray-600 text-lg mb-8 max-w-xl mx-auto">Join thousands of Sri Lankan users who trust Ghost VPN Hub for their daily internet needs.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => setCurrentPage('vpn')}
-              className="group px-8 py-4 bg-gradient-to-r from-brand-500 to-cyan-500 text-white font-bold rounded-2xl text-lg shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-300 hover:scale-105 inline-flex items-center justify-center gap-2"
-            >
-              Get Your Config
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <button onClick={() => navigate('/vpn')} className="group px-8 py-4 bg-gradient-to-r from-brand-500 to-cyan-500 text-white font-bold rounded-2xl text-lg shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-300 hover:scale-105 inline-flex items-center justify-center gap-2">
+              Get Your Config <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
-            <button
-              onClick={() => setCurrentPage('tutorials')}
-              className="px-8 py-4 glass dark:text-white text-gray-700 font-bold rounded-2xl text-lg hover:bg-white/10 dark:hover:bg-white/5 transition-all duration-300"
-            >
+            <button onClick={() => navigate('/tutorials')} className="px-8 py-4 glass dark:text-white text-gray-700 font-bold rounded-2xl text-lg hover:bg-white/10 dark:hover:bg-white/5 transition-all duration-300">
               View Tutorials
             </button>
           </div>

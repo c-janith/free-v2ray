@@ -508,19 +508,19 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Ad Settings */}
+                {/* Direct Link Ad Settings */}
                 <div className="glass rounded-2xl p-5">
-                  <h3 className="font-bold dark:text-white text-gray-900 mb-4">📺 Ad Settings</h3>
-                  <p className="text-sm dark:text-gray-400 text-gray-500 mb-4">Configure the Adsterra ad URLs that users must watch before copying configs. Each ad opens in a new tab — users must stay for the specified duration.</p>
+                  <h3 className="font-bold dark:text-white text-gray-900 mb-4">📺 Direct Link Ad Settings</h3>
+                  <p className="text-sm dark:text-gray-400 text-gray-500 mb-4">These are the Adsterra <strong>direct link</strong> ad URLs that open when users click "Watch Ad" buttons. Popunder ads are automatically disabled during the ad-watching flow to prevent double-ads.</p>
 
                   {[0, 1, 2].map(i => (
                     <div key={i} className="mb-4">
-                      <label className="block text-sm font-medium dark:text-gray-300 text-gray-700 mb-1">Ad URL {i + 1}</label>
+                      <label className="block text-sm font-medium dark:text-gray-300 text-gray-700 mb-1">Direct Link Ad URL {i + 1}</label>
                       <input type="url" value={app.settings.adUrls?.[i] || ''} onChange={e => {
                         const newUrls = [...(app.settings.adUrls || ['', '', ''])];
                         newUrls[i] = e.target.value;
                         app.updateSettings({ ...app.settings, adUrls: newUrls });
-                      }} placeholder="https://www.adsterra.com/your-ad-link/" className="w-full px-3 py-2 rounded-xl dark:bg-gray-800 bg-gray-50 border dark:border-gray-600 border-gray-300 dark:text-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono" />
+                      }} placeholder="https://www.adsterra.com/your-direct-link/" className="w-full px-3 py-2 rounded-xl dark:bg-gray-800 bg-gray-50 border dark:border-gray-600 border-gray-300 dark:text-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono" />
                     </div>
                   ))}
 
@@ -531,6 +531,49 @@ export default function AdminPage() {
                     }} className="w-full px-3 py-2 rounded-xl dark:bg-gray-800 bg-gray-50 border dark:border-gray-600 border-gray-300 dark:text-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50" />
                     <p className="text-xs dark:text-gray-500 text-gray-400 mt-1">Users must stay on the ad page for at least this many seconds.</p>
                   </div>
+                </div>
+
+                {/* Popunder Ad Settings */}
+                <div className="glass rounded-2xl p-5">
+                  <h3 className="font-bold dark:text-white text-gray-900 mb-4">💥 Popunder Ad Settings</h3>
+                  <p className="text-sm dark:text-gray-400 text-gray-500 mb-4">
+                    Popunder ads show on every page click. They are <strong className="dark:text-brand-400 text-brand-600">automatically disabled</strong> when users are watching direct-link ads on the VPN config page, so they don't get double-ads.
+                  </p>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium dark:text-gray-300 text-gray-700 mb-1">Popunder Script URL</label>
+                    <input type="url" value={app.settings.popunderScriptUrl || ''} onChange={e => {
+                      app.updateSettings({ ...app.settings, popunderScriptUrl: e.target.value });
+                    }} placeholder="https://www.adsterra.com/your-popunder-id.js" className="w-full px-3 py-2 rounded-xl dark:bg-gray-800 bg-gray-50 border dark:border-gray-600 border-gray-300 dark:text-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono" />
+                    <p className="text-xs dark:text-gray-500 text-gray-400 mt-1">Paste your Adsterra popunder script URL (.js file). Leave empty to disable popunders entirely.</p>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-brand-500/10 border border-brand-500/20">
+                    <span className="text-xs dark:text-brand-400 text-brand-600 font-medium">✓ Smart control:</span>
+                    <span className="text-xs dark:text-gray-400 text-gray-500">Popunders are paused while users watch direct-link ads, then resume after config is revealed.</span>
+                  </div>
+                </div>
+
+                {/* Tutorial Video Settings */}
+                <div className="glass rounded-2xl p-5">
+                  <h3 className="font-bold dark:text-white text-gray-900 mb-4">🎬 Tutorial Video URLs</h3>
+                  <p className="text-sm dark:text-gray-400 text-gray-500 mb-4">Add YouTube video URLs for each app tutorial. Supports youtube.com/watch?v=..., youtu.be/..., or just the video ID.</p>
+
+                  {[
+                    { key: 'netmod-windows', label: '🖥️ Netmod (Windows)' },
+                    { key: 'netch', label: '🎮 Netch (Windows)' },
+                    { key: 'happ', label: '😊 Happ (Windows)' },
+                    { key: 'v2rayng', label: '📱 v2rayNG (Android)' },
+                    { key: 'netmod-android', label: '📲 Netmod (Android)' },
+                    { key: 'v2box', label: '🍎 V2Box (iOS)' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="mb-3">
+                      <label className="block text-sm font-medium dark:text-gray-300 text-gray-700 mb-1">{label}</label>
+                      <input type="url" value={app.settings.tutorialVideos?.[key] || ''} onChange={e => {
+                        const videos = { ...(app.settings.tutorialVideos || {}) };
+                        videos[key] = e.target.value;
+                        app.updateSettings({ ...app.settings, tutorialVideos: videos });
+                      }} placeholder="https://youtube.com/watch?v=... or video ID" className="w-full px-3 py-2 rounded-xl dark:bg-gray-800 bg-gray-50 border dark:border-gray-600 border-gray-300 dark:text-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 font-mono" />
+                    </div>
+                  ))}
                 </div>
 
                 {/* Database Management */}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Globe, Zap, Copy, Check, ChevronRight, ChevronLeft, Eye, Clock, Shield, Bell, X, Info, CheckCircle2, AlertTriangle, ExternalLink, AlertCircle } from 'lucide-react';
 
@@ -53,7 +54,8 @@ function NotificationPanel({ open, onClose }: { open: boolean; onClose: () => vo
 }
 
 export default function VPNPage() {
-  const { servers, isps, packages, configs, recordCopy, notifications, showToast, settings, setCurrentPage } = useApp();
+  const { servers, isps, packages, configs, recordCopy, notifications, showToast, settings, setWatchingAds } = useApp();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
   const [selectedISP, setSelectedISP] = useState<string | null>(null);
@@ -95,6 +97,18 @@ export default function VPNPage() {
       setAdLeftAt(Date.now());
     }
   }, [watchingAd, adLeftAt, currentAdSlot, adWaitTime, showToast]);
+
+  // Disable popunders when in ad-watching mode, re-enable when done
+  useEffect(() => {
+    if (step === 4 && adsWatched >= totalAdsRequired) {
+      setWatchingAds(false);
+    }
+  }, [step, adsWatched, setWatchingAds]);
+
+  // Reset watchingAds when leaving the VPN page
+  useEffect(() => {
+    return () => { setWatchingAds(false); };
+  }, [setWatchingAds]);
 
   useEffect(() => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -148,6 +162,7 @@ export default function VPNPage() {
     setCurrentAdSlot(null);
     setAdLeftAt(null);
     setAdWarning(null);
+    setWatchingAds(false);
   };
 
   const steps = [
@@ -282,7 +297,7 @@ export default function VPNPage() {
               {filteredPackages.map(pkg => {
                 const hasConfig = configs.some(c => c.serverId === selectedServer && c.packageId === pkg.id);
                 return (
-                  <button key={pkg.id} onClick={() => { if (hasConfig) { setSelectedPackage(pkg.id); setStep(4); } }} disabled={!hasConfig}
+                  <button key={pkg.id} onClick={() => { if (hasConfig) { setSelectedPackage(pkg.id); setStep(4); setWatchingAds(true); } }} disabled={!hasConfig}
                     className={`p-5 rounded-2xl text-left transition-all duration-300 ${
                       !hasConfig ? 'opacity-40 cursor-not-allowed glass' :
                       selectedPackage === pkg.id ? 'bg-brand-500/15 border-2 border-brand-500 card-hover' : 'glass border-2 border-transparent hover:border-brand-500/30 card-hover'
@@ -309,7 +324,7 @@ export default function VPNPage() {
         {step === 4 && (
           <div className="animate-fade-in-up">
             <div className="flex items-center gap-3 mb-6">
-              <button onClick={() => { setStep(3); setAdsWatched(0); setWatchingAd(false); setAdWarning(null); }} className="p-2 glass rounded-xl dark:text-gray-300 text-gray-600 hover:text-brand-400 transition-colors"><ChevronLeft className="w-5 h-5" /></button>
+              <button onClick={() => { setStep(3); setAdsWatched(0); setWatchingAd(false); setAdWarning(null); setWatchingAds(false); }} className="p-2 glass rounded-xl dark:text-gray-300 text-gray-600 hover:text-brand-400 transition-colors"><ChevronLeft className="w-5 h-5" /></button>
               <div>
                 <h2 className="text-2xl font-bold dark:text-white text-gray-900">Get Your Config</h2>
                 <p className="dark:text-gray-400 text-gray-500 text-sm">Watch {totalAdsRequired} ads to unlock your V2Ray config</p>
@@ -447,7 +462,7 @@ export default function VPNPage() {
                 <div className="glass rounded-2xl p-5">
                   <h4 className="font-semibold dark:text-white text-gray-900 mb-2">📱 Need help setting up?</h4>
                   <p className="text-sm dark:text-gray-400 text-gray-500 mb-3">Follow our step-by-step tutorials for your device.</p>
-                  <button onClick={() => setCurrentPage('tutorials')} className="text-sm text-brand-400 font-medium hover:text-brand-300 transition-colors">View Tutorials →</button>
+                  <button onClick={() => navigate('/tutorials')} className="text-sm text-brand-400 font-medium hover:text-brand-300 transition-colors">View Tutorials →</button>
                 </div>
               </div>
             )}

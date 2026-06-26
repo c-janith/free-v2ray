@@ -7,6 +7,15 @@ export const defaultSettings: AppSettings = {
     'https://www.adsterra.com/example-ad-3/',
   ],
   adWaitTime: 15,
+  popunderScriptUrl: '',
+  tutorialVideos: {
+    'netmod-windows': '',
+    'netch': '',
+    'happ': '',
+    'v2rayng': '',
+    'netmod-android': '',
+    'v2box': '',
+  },
 };
 
 export const initialServers: Server[] = [
