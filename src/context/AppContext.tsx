@@ -1,44 +1,46 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Server, ISP, VpnPackage, V2RayConfig, AppNotification, CopyStat, Page } from '../types';
-import { initialServers, initialISPs, initialPackages, initialConfigs, initialNotifications, ADMIN_PASSWORD } from '../data/initialData';
+import { Server, ISP, VpnPackage, V2RayConfig, AppNotification, AppSettings, CopyStat, Page } from '../types';
+import { initialServers, initialISPs, initialPackages, initialConfigs, initialNotifications, defaultSettings, ADMIN_PASSWORD } from '../data/initialData';
+import { db, isFirebaseConfigured } from '../lib/firebase';
+import {
+  collection, doc, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc,
+  increment, query, orderBy, limit, writeBatch
+} from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 
 interface AppContextType {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
+  loading: boolean;
   servers: Server[];
   isps: ISP[];
   packages: VpnPackage[];
   configs: V2RayConfig[];
   notifications: AppNotification[];
   copyStats: CopyStat[];
+  settings: AppSettings;
   adminAuthenticated: boolean;
   adminLogin: (password: string) => boolean;
   adminLogout: () => void;
-  // CRUD Servers
   addServer: (server: Server) => void;
   updateServer: (server: Server) => void;
   deleteServer: (id: string) => void;
-  // CRUD ISPs
   addISP: (isp: ISP) => void;
   updateISP: (isp: ISP) => void;
   deleteISP: (id: string) => void;
-  // CRUD Packages
   addPackage: (pkg: VpnPackage) => void;
   updatePackage: (pkg: VpnPackage) => void;
   deletePackage: (id: string) => void;
-  // CRUD Configs
   addConfig: (config: V2RayConfig) => void;
   updateConfig: (config: V2RayConfig) => void;
   deleteConfig: (id: string) => void;
-  // CRUD Notifications
   addNotification: (notif: AppNotification) => void;
   updateNotification: (notif: AppNotification) => void;
   deleteNotification: (id: string) => void;
-  // Stats
+  updateSettings: (settings: AppSettings) => void;
   recordCopy: (configId: string) => void;
-  getStatsForConfig: (configId: string) => number;
   getTotalCopies: () => number;
   getTodayCopies: () => number;
   getPopularISP: () => ISP | null;
@@ -48,90 +50,194 @@ interface AppContextType {
   getCopiesByPackage: () => Record<string, number>;
   getCopiesByServer: () => Record<string, number>;
   getRecentStats: () => CopyStat[];
-  // Toast
+  seedDatabase: () => Promise<void>;
   toast: string | null;
   showToast: (msg: string) => void;
+  usingFirebase: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
-  }
+function loadLS<T>(key: string, fallback: T): T {
+  try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
+}
+function saveLS<T>(key: string, value: T): void {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full */ }
 }
 
-function saveToStorage<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Storage full or unavailable
-  }
+function getDB(): Firestore {
+  return db!;
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => loadFromStorage('gvh-theme', 'dark'));
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => loadLS('gvh-theme', 'dark'));
   const [currentPage, setCurrentPage] = useState<Page>('home');
-  const [servers, setServers] = useState<Server[]>(() => loadFromStorage('gvh-servers', initialServers));
-  const [isps, setISPs] = useState<ISP[]>(() => loadFromStorage('gvh-isps', initialISPs));
-  const [packages, setPackages] = useState<VpnPackage[]>(() => loadFromStorage('gvh-packages', initialPackages));
-  const [configs, setConfigs] = useState<V2RayConfig[]>(() => loadFromStorage('gvh-configs', initialConfigs));
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => loadFromStorage('gvh-notifications', initialNotifications));
-  const [copyStats, setCopyStats] = useState<CopyStat[]>(() => loadFromStorage('gvh-copyStats', []));
-  const [adminAuthenticated, setAdminAuthenticated] = useState<boolean>(() => loadFromStorage('gvh-adminAuth', false));
+  const [loading, setLoading] = useState(true);
+  const [servers, setServers] = useState<Server[]>([]);
+  const [isps, setISPs] = useState<ISP[]>([]);
+  const [packages, setPackages] = useState<VpnPackage[]>([]);
+  const [configs, setConfigs] = useState<V2RayConfig[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [copyStats, setCopyStats] = useState<CopyStat[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Persist to localStorage
-  useEffect(() => { saveToStorage('gvh-theme', theme); document.documentElement.classList.toggle('dark', theme === 'dark'); }, [theme]);
-  useEffect(() => { saveToStorage('gvh-servers', servers); }, [servers]);
-  useEffect(() => { saveToStorage('gvh-isps', isps); }, [isps]);
-  useEffect(() => { saveToStorage('gvh-packages', packages); }, [packages]);
-  useEffect(() => { saveToStorage('gvh-configs', configs); }, [configs]);
-  useEffect(() => { saveToStorage('gvh-notifications', notifications); }, [notifications]);
-  useEffect(() => { saveToStorage('gvh-copyStats', copyStats); }, [copyStats]);
-  useEffect(() => { saveToStorage('gvh-adminAuth', adminAuthenticated); }, [adminAuthenticated]);
+  // Persist theme
+  useEffect(() => {
+    saveLS('gvh-theme', theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  // Load data - Firebase or localStorage
+  useEffect(() => {
+    if (isFirebaseConfigured && db) {
+      const database = db;
+      const collNames = [
+        { name: 'servers', setter: setServers as (v: any[]) => void },
+        { name: 'isps', setter: setISPs as (v: any[]) => void },
+        { name: 'packages', setter: setPackages as (v: any[]) => void },
+        { name: 'configs', setter: setConfigs as (v: any[]) => void },
+        { name: 'notifications', setter: setNotifications as (v: any[]) => void },
+      ];
+
+      const unsubs = collNames.map(({ name, setter }) =>
+        onSnapshot(collection(database, name), (snap) => {
+          setter(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        })
+      );
+
+      // Settings document
+      unsubs.push(
+        onSnapshot(doc(database, 'settings', 'app'), (snap) => {
+          if (snap.exists()) {
+            setSettings(snap.data() as AppSettings);
+          }
+        })
+      );
+
+      // Copy stats
+      unsubs.push(
+        onSnapshot(query(collection(database, 'copyStats'), orderBy('timestamp', 'desc'), limit(500)), (snap) => {
+          setCopyStats(snap.docs.map(d => ({ id: d.id, ...d.data() } as CopyStat)));
+        })
+      );
+
+      setLoading(false);
+      return () => unsubs.forEach(u => u());
+    } else {
+      setServers(loadLS('gvh-servers', initialServers));
+      setISPs(loadLS('gvh-isps', initialISPs));
+      setPackages(loadLS('gvh-packages', initialPackages));
+      setConfigs(loadLS('gvh-configs', initialConfigs));
+      setNotifications(loadLS('gvh-notifications', initialNotifications));
+      setCopyStats(loadLS('gvh-copyStats', []));
+      setSettings(loadLS('gvh-settings', defaultSettings));
+      setLoading(false);
+    }
+  }, []);
+
+  // Persist to localStorage when not using Firebase
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-servers', servers); }, [servers]);
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-isps', isps); }, [isps]);
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-packages', packages); }, [packages]);
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-configs', configs); }, [configs]);
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-notifications', notifications); }, [notifications]);
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-copyStats', copyStats); }, [copyStats]);
+  useEffect(() => { if (!isFirebaseConfigured) saveLS('gvh-settings', settings); }, [settings]);
 
   const toggleTheme = useCallback(() => setTheme(t => t === 'dark' ? 'light' : 'dark'), []);
-
-  const adminLogin = useCallback((password: string) => {
-    if (password === ADMIN_PASSWORD) {
-      setAdminAuthenticated(true);
-      return true;
-    }
-    return false;
-  }, []);
-
+  const adminLogin = useCallback((pw: string) => { if (pw === ADMIN_PASSWORD) { setAdminAuthenticated(true); return true; } return false; }, []);
   const adminLogout = useCallback(() => setAdminAuthenticated(false), []);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+  // CRUD Servers
+  const addServer = useCallback((s: Server) => {
+    if (isFirebaseConfigured) { const { id, ...data } = s; setDoc(doc(getDB(), 'servers', id), data); }
+    else { setServers(prev => { const n = [...prev, s]; saveLS('gvh-servers', n); return n; }); }
   }, []);
 
-  // CRUD operations
-  const addServer = useCallback((s: Server) => setServers(prev => [...prev, s]), []);
-  const updateServer = useCallback((s: Server) => setServers(prev => prev.map(x => x.id === s.id ? s : x)), []);
-  const deleteServer = useCallback((id: string) => { setServers(prev => prev.filter(x => x.id !== id)); setConfigs(prev => prev.filter(c => c.serverId !== id)); }, []);
+  const updateServer = useCallback((s: Server) => {
+    if (isFirebaseConfigured) { const { id, ...data } = s; updateDoc(doc(getDB(), 'servers', id), data); }
+    else { setServers(prev => { const n = prev.map(x => x.id === s.id ? s : x); saveLS('gvh-servers', n); return n; }); }
+  }, []);
 
-  const addISP = useCallback((i: ISP) => setISPs(prev => [...prev, i]), []);
-  const updateISP = useCallback((i: ISP) => setISPs(prev => prev.map(x => x.id === i.id ? i : x)), []);
-  const deleteISP = useCallback((id: string) => { setISPs(prev => prev.filter(x => x.id !== id)); setPackages(prev => prev.filter(p => p.ispId !== id)); }, []);
+  const deleteServer = useCallback((id: string) => {
+    if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'servers', id)); }
+    else { setServers(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-servers', n); return n; }); }
+  }, []);
 
-  const addPackage = useCallback((p: VpnPackage) => setPackages(prev => [...prev, p]), []);
-  const updatePackage = useCallback((p: VpnPackage) => setPackages(prev => prev.map(x => x.id === p.id ? p : x)), []);
-  const deletePackage = useCallback((id: string) => { setPackages(prev => prev.filter(x => x.id !== id)); setConfigs(prev => prev.filter(c => c.packageId !== id)); }, []);
+  // CRUD ISPs
+  const addISP = useCallback((i: ISP) => {
+    if (isFirebaseConfigured) { const { id, ...data } = i; setDoc(doc(getDB(), 'isps', id), data); }
+    else { setISPs(prev => { const n = [...prev, i]; saveLS('gvh-isps', n); return n; }); }
+  }, []);
 
-  const addConfig = useCallback((c: V2RayConfig) => setConfigs(prev => [...prev, c]), []);
-  const updateConfig = useCallback((c: V2RayConfig) => setConfigs(prev => prev.map(x => x.id === c.id ? c : x)), []);
-  const deleteConfig = useCallback((id: string) => setConfigs(prev => prev.filter(x => x.id !== id)), []);
+  const updateISP = useCallback((i: ISP) => {
+    if (isFirebaseConfigured) { const { id, ...data } = i; updateDoc(doc(getDB(), 'isps', id), data); }
+    else { setISPs(prev => { const n = prev.map(x => x.id === i.id ? i : x); saveLS('gvh-isps', n); return n; }); }
+  }, []);
 
-  const addNotification = useCallback((n: AppNotification) => setNotifications(prev => [n, ...prev]), []);
-  const updateNotification = useCallback((n: AppNotification) => setNotifications(prev => prev.map(x => x.id === n.id ? n : x)), []);
-  const deleteNotification = useCallback((id: string) => setNotifications(prev => prev.filter(x => x.id !== id)), []);
+  const deleteISP = useCallback((id: string) => {
+    if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'isps', id)); }
+    else { setISPs(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-isps', n); return n; }); }
+  }, []);
 
+  // CRUD Packages
+  const addPackage = useCallback((p: VpnPackage) => {
+    if (isFirebaseConfigured) { const { id, ...data } = p; setDoc(doc(getDB(), 'packages', id), data); }
+    else { setPackages(prev => { const n = [...prev, p]; saveLS('gvh-packages', n); return n; }); }
+  }, []);
+
+  const updatePackage = useCallback((p: VpnPackage) => {
+    if (isFirebaseConfigured) { const { id, ...data } = p; updateDoc(doc(getDB(), 'packages', id), data); }
+    else { setPackages(prev => { const n = prev.map(x => x.id === p.id ? p : x); saveLS('gvh-packages', n); return n; }); }
+  }, []);
+
+  const deletePackage = useCallback((id: string) => {
+    if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'packages', id)); }
+    else { setPackages(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-packages', n); return n; }); }
+  }, []);
+
+  // CRUD Configs
+  const addConfig = useCallback((c: V2RayConfig) => {
+    if (isFirebaseConfigured) { const { id, ...data } = c; setDoc(doc(getDB(), 'configs', id), data); }
+    else { setConfigs(prev => { const n = [...prev, c]; saveLS('gvh-configs', n); return n; }); }
+  }, []);
+
+  const updateConfig = useCallback((c: V2RayConfig) => {
+    if (isFirebaseConfigured) { const { id, ...data } = c; updateDoc(doc(getDB(), 'configs', id), data); }
+    else { setConfigs(prev => { const n = prev.map(x => x.id === c.id ? c : x); saveLS('gvh-configs', n); return n; }); }
+  }, []);
+
+  const deleteConfig = useCallback((id: string) => {
+    if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'configs', id)); }
+    else { setConfigs(prev => { const n = prev.filter(x => x.id !== id); saveLS('gvh-configs', n); return n; }); }
+  }, []);
+
+  // CRUD Notifications
+  const addNotification = useCallback((n: AppNotification) => {
+    if (isFirebaseConfigured) { const { id, ...data } = n; setDoc(doc(getDB(), 'notifications', id), data); }
+    else { setNotifications(prev => { const next = [n, ...prev]; saveLS('gvh-notifications', next); return next; }); }
+  }, []);
+
+  const updateNotification = useCallback((n: AppNotification) => {
+    if (isFirebaseConfigured) { const { id, ...data } = n; updateDoc(doc(getDB(), 'notifications', id), data); }
+    else { setNotifications(prev => { const next = prev.map(x => x.id === n.id ? n : x); saveLS('gvh-notifications', next); return next; }); }
+  }, []);
+
+  const deleteNotification = useCallback((id: string) => {
+    if (isFirebaseConfigured) { deleteDoc(doc(getDB(), 'notifications', id)); }
+    else { setNotifications(prev => { const nv = prev.filter(x => x.id !== id); saveLS('gvh-notifications', nv); return nv; }); }
+  }, []);
+
+  // Settings
+  const updateSettings = useCallback((s: AppSettings) => {
+    if (isFirebaseConfigured) { setDoc(doc(getDB(), 'settings', 'app'), s); }
+    else { setSettings(s); saveLS('gvh-settings', s); }
+  }, []);
+
+  // Record copy
   const recordCopy = useCallback((configId: string) => {
     const config = configs.find(c => c.id === configId);
     if (!config) return;
@@ -144,79 +250,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ispId: pkg?.ispId || '',
       packageId: config.packageId,
     };
-    setCopyStats(prev => [...prev, stat]);
-    setConfigs(prev => prev.map(c => c.id === configId ? { ...c, copyCount: c.copyCount + 1 } : c));
+    if (isFirebaseConfigured) {
+      addDoc(collection(getDB(), 'copyStats'), stat);
+      updateDoc(doc(getDB(), 'configs', configId), { copyCount: increment(1) });
+    } else {
+      setCopyStats(prev => { const n = [...prev, stat]; saveLS('gvh-copyStats', n); return n; });
+      setConfigs(prev => { const n = prev.map(c => c.id === configId ? { ...c, copyCount: c.copyCount + 1 } : c); saveLS('gvh-configs', n); return n; });
+    }
   }, [configs, packages]);
 
-  const getStatsForConfig = useCallback((configId: string) => {
-    return copyStats.filter(s => s.configId === configId).length;
-  }, [copyStats]);
-
+  // Stats helpers
   const getTotalCopies = useCallback(() => copyStats.length, [copyStats]);
-
   const getTodayCopies = useCallback(() => {
     const today = new Date().toISOString().split('T')[0];
     return copyStats.filter(s => s.timestamp.startsWith(today)).length;
   }, [copyStats]);
-
   const getPopularISP = useCallback(() => {
     const counts: Record<string, number> = {};
     copyStats.forEach(s => { counts[s.ispId] = (counts[s.ispId] || 0) + 1; });
     const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
     return isps.find(i => i.id === topId) || null;
   }, [copyStats, isps]);
-
   const getPopularPackage = useCallback(() => {
     const counts: Record<string, number> = {};
     copyStats.forEach(s => { counts[s.packageId] = (counts[s.packageId] || 0) + 1; });
     const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
     return packages.find(p => p.id === topId) || null;
   }, [copyStats, packages]);
-
   const getPopularServer = useCallback(() => {
     const counts: Record<string, number> = {};
     copyStats.forEach(s => { counts[s.serverId] = (counts[s.serverId] || 0) + 1; });
     const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
     return servers.find(sv => sv.id === topId) || null;
   }, [copyStats, servers]);
-
   const getCopiesByISP = useCallback(() => {
-    const counts: Record<string, number> = {};
-    copyStats.forEach(s => { counts[s.ispId] = (counts[s.ispId] || 0) + 1; });
-    return counts;
+    const c: Record<string, number> = {}; copyStats.forEach(s => { c[s.ispId] = (c[s.ispId] || 0) + 1; }); return c;
   }, [copyStats]);
-
   const getCopiesByPackage = useCallback(() => {
-    const counts: Record<string, number> = {};
-    copyStats.forEach(s => { counts[s.packageId] = (counts[s.packageId] || 0) + 1; });
-    return counts;
+    const c: Record<string, number> = {}; copyStats.forEach(s => { c[s.packageId] = (c[s.packageId] || 0) + 1; }); return c;
   }, [copyStats]);
-
   const getCopiesByServer = useCallback(() => {
-    const counts: Record<string, number> = {};
-    copyStats.forEach(s => { counts[s.serverId] = (counts[s.serverId] || 0) + 1; });
-    return counts;
+    const c: Record<string, number> = {}; copyStats.forEach(s => { c[s.serverId] = (c[s.serverId] || 0) + 1; }); return c;
   }, [copyStats]);
+  const getRecentStats = useCallback(() => [...copyStats].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20), [copyStats]);
 
-  const getRecentStats = useCallback(() => {
-    return [...copyStats].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20);
-  }, [copyStats]);
+  // Seed database
+  const seedDatabase = useCallback(async () => {
+    if (!isFirebaseConfigured) return;
+    try {
+      const database = getDB();
+      const batch = writeBatch(database);
+      initialServers.forEach(s => { batch.set(doc(database, 'servers', s.id), s); });
+      initialISPs.forEach(i => { batch.set(doc(database, 'isps', i.id), i); });
+      initialPackages.forEach(p => { batch.set(doc(database, 'packages', p.id), p); });
+      initialConfigs.forEach(c => { batch.set(doc(database, 'configs', c.id), c); });
+      initialNotifications.forEach(n => { batch.set(doc(database, 'notifications', n.id), n); });
+      batch.set(doc(database, 'settings', 'app'), defaultSettings);
+      await batch.commit();
+      showToast('Database seeded successfully! 🎉');
+    } catch (e: any) {
+      showToast('Error seeding: ' + e.message);
+    }
+  }, [showToast]);
 
   return (
     <AppContext.Provider value={{
-      theme, toggleTheme, currentPage, setCurrentPage,
-      servers, isps, packages, configs, notifications, copyStats,
+      theme, toggleTheme, currentPage, setCurrentPage, loading,
+      servers, isps, packages, configs, notifications, copyStats, settings,
       adminAuthenticated, adminLogin, adminLogout,
       addServer, updateServer, deleteServer,
       addISP, updateISP, deleteISP,
       addPackage, updatePackage, deletePackage,
       addConfig, updateConfig, deleteConfig,
       addNotification, updateNotification, deleteNotification,
-      recordCopy, getStatsForConfig, getTotalCopies, getTodayCopies,
+      updateSettings,
+      recordCopy, getTotalCopies, getTodayCopies,
       getPopularISP, getPopularPackage, getPopularServer,
       getCopiesByISP, getCopiesByPackage, getCopiesByServer,
-      getRecentStats,
-      toast, showToast,
+      getRecentStats, seedDatabase,
+      toast, showToast, usingFirebase: isFirebaseConfigured,
     }}>
       {children}
     </AppContext.Provider>

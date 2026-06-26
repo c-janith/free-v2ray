@@ -41,6 +41,11 @@ export interface AppNotification {
   pinned: boolean;
 }
 
+export interface AppSettings {
+  adUrls: string[];
+  adWaitTime: number;
+}
+
 export interface CopyStat {
   id: string;
   configId: string;
@@ -51,15 +56,3 @@ export interface CopyStat {
 }
 
 export type Page = 'home' | 'vpn' | 'tutorials' | 'admin';
-
-export interface AppState {
-  theme: 'dark' | 'light';
-  currentPage: Page;
-  servers: Server[];
-  isps: ISP[];
-  packages: VpnPackage[];
-  configs: V2RayConfig[];
-  notifications: AppNotification[];
-  copyStats: CopyStat[];
-  adminAuthenticated: boolean;
-}
